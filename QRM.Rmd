@@ -1,0 +1,134 @@
+---
+title: "Untitled"
+author: "Hiba Majdoubi"
+date: "2025-03-24"
+output: pdf_document
+---
+
+```{r,include=FALSE}
+library(readr)
+library(tseries)
+library(rugarch)
+library(FinTS)
+
+stocks=read_csv("C:/Users/hibam/OneDrive/Documents/Master Actuariat/QRM/stocks.csv")
+```
+
+```{r,include=FALSE}
+
+str(stocks)
+stocks$Date <- as.Date(stocks$Date, format = "%d/%m/%Y")
+
+```
+
+
+```{r,echo=FALSE,fig.width=10, fig.height=4}
+
+# Group A so we will work with the z col (in reference to excel col notation, so basically the last col in our case)
+z=stocks$WMT
+par(mfrow=c(1,2))
+plot(stocks$Date, z, type = "l", col = "blue",
+     main = "Stock Price of WMT over Time",
+     xlab = "Date", ylab = "Stock Price")
+
+log_returns <- diff(log(z))
+date_returns <- stocks$Date[-1]
+plot(date_returns, log_returns, type = "l", col = "red",
+     main = "Log Returns of WMT",
+     xlab = "Date", ylab = "Log Return")
+
+```
+```{r,echo=FALSE,fig.width=10, fig.height=5.5}
+boxplot(log_returns,
+        main = "Boxplot of the returns",
+        ylab = "Rendement log",
+        col = "lightblue", border = "black")
+
+```
+
+The boxplot shows several outliers, which implies that the distribution has heavy tails.
+The result of the Jarque-Bera test leads us to reject the hypothesis of normality.
+These results highlight characteristics of non-normality, which motivates the use of conditional volatility models, such as GARCH.
+
+```{r,echo=FALSE,fig.width=10, fig.height=6}
+
+#Jarque-Bera normality test
+
+jarque.bera.test(log_returns)
+
+# ACF autocorrelation function of returns 
+par(mfrow = c(2, 1), mar = c(4, 4, 5, 2) )
+
+# ACF des rendements
+acf(log_returns,
+    main = "ACF des rendements log",
+    col = "blue",
+    lwd = 2,
+    ylim = c(-1, 1),
+    xaxt = "n")
+axis(1, at = seq(0, 100, 10))  # personnaliser l’axe x
+
+# ACF des rendements au carré
+acf(log_returns^2,
+    main = expression("ACF des rendements log"^2),
+    col = "darkred",
+    lwd = 2,
+    xaxt = "n")
+axis(1, at = seq(0, 100, 10))
+
+```
+```{r,echo=FALSE}
+
+#slide 74
+
+lambda <- 0.94
+T <- length(log_returns)
+
+
+sigma2 <- rep(NA, T)
+sigma2[1] <- var(log_returns)  
+
+# (RiskMetrics)
+for (t in 2:T) {
+  sigma2[t] <- lambda * sigma2[t - 1] + (1 - lambda) * log_returns[t - 1]^2
+}
+
+# Volatilité conditionnelle
+sigma <- sqrt(sigma2)
+
+# VaR 1% conditionnelle sous normalité
+VaR_riskmetrics <- -qnorm(0.01) * sigma
+
+plot(date_returns, log_returns, type = "l", col = "black", 
+     main = "Rendements et VaR 1% (RiskMetrics)", ylab = "Log-return")
+lines(date_returns, -VaR_riskmetrics, col = "red", lty = 2)
+legend("bottomright", legend = c("Log-returns", "VaR 1%"), 
+       col = c("black", "red"), lty = c(1, 2))
+
+
+```
+```{r,echo=FALSE}
+
+# Identifier les exceptions (violations de la VaR)
+exceptions <- ifelse(log_returns < -VaR_riskmetrics, 1, 0)
+
+# Charger le test DQ (Diebold-Mariano / Kupiec) depuis le package rugarch
+
+DQtest <- function(VaR, returns, alpha = 0.01, lags = 5) {
+  y <- ifelse(returns < -VaR, 1, 0)
+  n <- length(y)
+  y_lagged <- embed(y, lags + 1)
+  X <- cbind(1, y_lagged[, 2:(lags + 1)], VaR[(lags + 1):(n)])
+  y_target <- y_lagged[, 1]
+  fit <- glm(y_target ~ X - 1, family = binomial(link = "logit"))
+  print(summary(fit))
+}
+DQtest(VaR_riskmetrics, log_returns, alpha = 0.01, lags = 5)
+
+```
+| Coefficient | Interpretation |
+|-------------|----------------|
+| X1 (Constant) | Highly significant (p < 2e-16) → indicates a non-zero average probability of exception. |
+| X2 to X6 (Lags of past exceptions) | Some are not significant (e.g. X2, X4, X6), but others are (X3, X5, X7). |
+| X7 (VaR) | Significant at the 5% level (p = 0.04480) → the probability of exception depends on the VaR itself, which is not desirable. |
+
