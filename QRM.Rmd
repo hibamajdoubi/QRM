@@ -1,10 +1,38 @@
 ---
-title: "Untitled"
-author: "Hiba Majdoubi"
-date: "2025-03-24"
-output: pdf_document
+title: ""
+author: ""
+date: ""
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: false
+    toc: false
+    keep_tex: true
+fontsize: 12pt
 ---
+\begin{titlepage}
+\begin{center}
+\vspace*{3cm}
+\includegraphics[width=10cm]{UCL.png} \\[5cm]
 
+\textbf{\LARGE LACTU 2210 - Project 1} \\[2cm]
+\textit{\LARGE Group : A}\\
+
+
+\vfill
+\large
+MAJDOUBI HIBA  5818-19-00 \\
+RWAWI YOUSRA 7831-24-00 \\[1cm]
+\textit{Université catholique de Louvain} \\[2cm]
+March 2025
+
+
+\end{center}
+\end{titlepage}
+
+\newpage
+
+\newpage
 ```{r,include=FALSE}
 library(readr)
 library(tseries)
